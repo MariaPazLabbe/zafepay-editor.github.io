@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Zafepay · Editor de plantillas</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+  :root{
+    --zafe-blue:#4F4FE8;
+    --zafe-blue-deep:#2E2EBF;
+    --zafe-blue-soft:#EEEDFE;
+    --zafe-mint:#34D8A3;
+    --zafe-mint-soft:#E3F9F0;
+    --zafe-yellow:#FFD84D;
+    --zafe-ink:#0F1037;
+    --zafe-gray:#6B6E8C;
+    --zafe-paper:#FAFAFE;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{font-family:'Inter','Helvetica Neue',Arial,sans-serif; background:#F2F2F7; color:#0F1037; -webkit-font-smoothing:antialiased; height:100%; overflow:hidden;}
+  .app{display:grid; grid-template-columns:300px 1fr 320px; height:100vh;}
+
+  /* TOPBAR */
+  .topbar{grid-column:1 / -1; background:white; border-bottom:1px solid #E5E5EE; padding:12px 24px; display:flex; align-items:center; gap:16px; height:60px;}
+  .topbar .brand{font-weight:600; font-size:16px; display:flex; align-items:center; gap:8px;}
+  .topbar .brand svg{width:24px; height:24px;}
+  .topbar .spacer{flex:1;}
+  .topbar button{border:none; padding:10px 18px; border-radius:8px; font-size:14px; font-weight:500; cursor:pointer; font-family:inherit; display:inline-flex; align-items:center; gap:8px;}
+  .topbar .btn-export{background:var(--zafe-blue); color:white;}
+  .topbar .btn-export:hover{background:var(--zafe-blue-deep);}
+  .topbar .btn-secondary{background:#F2F2F7; color:#0F1037;}
+  .topbar .btn-secondary:hover{background:#E5E5EE;}
+
+  /* MAIN LAYOUT */
+  .main-wrap{display:contents;}
+  .left-panel, .right-panel{background:white; overflow-y:auto; padding:24px;}
+  .left-panel{border-right:1px solid #E5E5EE;}
+  .right-panel{border-left:1px solid #E5E5EE;}
+  .center{background:#E5E5EE; display:flex; align-items:center; justify-content:center; overflow:auto; padding:40px;}
+
+  .panel-title{font-size:11px; font-weight:600; color:var(--zafe-gray); letter-spacing:0.08em; text-transform:uppercase; margin-bottom:12px; margin-top:24px;}
+  .panel-title:first-of-type{margin-top:0;}
+
+  /* TEMPLATE PICKER */
+  .templates-list{display:flex; flex-direction:column; gap:8px;}
+  .template-item{background:#F9F9FE; border:2px solid transparent; padding:12px; border-radius:10px; cursor:pointer; display:flex; align-items:center; gap:12px; transition:all 0.15s;}
+  .template-item:hover{background:#EEEDFE;}
+  .template-item.active{border-color:var(--zafe-blue); background:var(--zafe-blue-soft);}
+  .template-num{width:36px; height:36px; border-radius:8px; background:var(--zafe-blue); color:white; display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:600; flex-shrink:0;}
+  .template-item.active .template-num{background:var(--zafe-blue-deep);}
+  .template-name{font-size:13px; font-weight:500;}
+  .template-desc{font-size:11px; color:var(--zafe-gray); margin-top:2px;}
+
+  /* CONTROLS */
+  .control-group{margin-bottom:18px;}
+  .control-group label{display:block; font-size:12px; font-weight:500; color:#0F1037; margin-bottom:6px;}
+  .control-group input[type="text"], .control-group input[type="url"], .control-group textarea{width:100%; padding:8px 10px; border:1px solid #E5E5EE; border-radius:6px; font-size:13px; font-family:inherit; color:#0F1037; resize:vertical;}
+  .control-group input[type="text"]:focus, .control-group input[type="url"]:focus, .control-group textarea:focus{outline:none; border-color:var(--zafe-blue);}
+  .control-group input[type="file"]{font-size:12px;}
+
+  .color-grid{display:grid; grid-template-columns:repeat(3, 1fr); gap:8px;}
+  .color-swatch{height:48px; border-radius:6px; cursor:pointer; position:relative; border:2px solid transparent;}
+  .color-swatch::after{content:attr(data-label); position:absolute; bottom:2px; left:4px; right:4px; font-size:9px; color:rgba(255,255,255,0.8); font-weight:600; font-family:monospace;}
+  .color-swatch.dark::after{color:rgba(0,0,0,0.5);}
+
+  .color-picker-row{display:flex; align-items:center; gap:10px; margin-bottom:8px;}
+  .color-picker-row label{flex:1; font-size:12px; margin-bottom:0;}
+  .color-picker-row input[type="color"]{width:40px; height:32px; border:1px solid #E5E5EE; border-radius:6px; cursor:pointer; padding:2px;}
+  .color-picker-row .hex{font-family:monospace; font-size:11px; color:var(--zafe-gray); min-width:60px;}
+
+  /* TIPS */
+  .tip{background:var(--zafe-mint-soft); border-radius:8px; padding:12px; font-size:12px; color:#0F1037; line-height:1.5; margin-bottom:16px;}
+  .tip strong{color:#0F6E56;}
+  .tip svg{width:14px; height:14px; vertical-align:-2px;}
+
+  /* SLIDE PREVIEW */
+  .stage{width:600px; height:600px; background:white; border-radius:18px; box-shadow:0 8px 32px rgba(15,16,55,0.12); overflow:hidden; position:relative;}
+  .stage-inner{width:1080px; height:1080px; transform:scale(0.5556); transform-origin:top left;}
+
+  /* === SLIDE STYLES === */
+  .slide-render{width:1080px; height:1080px; position:relative; overflow:hidden; font-family:'Inter',sans-serif; color:#0F1037;}
+
+  .logo-row{display:flex; align-items:center; gap:14px; position:absolute; top:60px; left:60px; z-index:10;}
+  .logo-mark{width:48px; height:48px; background:rgba(255,255,255,0.15); border-radius:12px; display:flex; align-items:center; justify-content:center;}
+  .logo-mark svg{width:28px; height:28px;}
+  .logo-text{color:white; font-weight:600; font-size:32px; letter-spacing:-0.02em; line-height:1;}
+  .logo-text small{display:block; font-size:12px; font-weight:500; opacity:0.7; letter-spacing:0.14em; margin-top:4px;}
+  .slide-number{position:absolute; top:60px; right:60px; color:rgba(255,255,255,0.55); font-size:22px; font-weight:500; z-index:10;}
+  .slide-number.dark{color:rgba(15,16,55,0.4);}
+
+  /* Slide 1 — Portada con silueta */
+  .tpl-1{background:var(--zafe-blue);}
+  .tpl-1 .shape-a{position:absolute; top:-180px; right:-180px; width:520px; height:520px; border-radius:50%; background:var(--zafe-mint); opacity:0.18; z-index:1;}
+  .tpl-1 .shape-b{position:absolute; bottom:-220px; left:-160px; width:440px; height:440px; border-radius:50%; background:var(--zafe-blue-deep); opacity:0.7; z-index:1;}
+  .tpl-1 .photo-wrap{position:absolute; right:40px; bottom:60px; width:580px; height:820px; z-index:3; background-size:cover; background-position:center 20%; -webkit-mask-image:radial-gradient(ellipse 70% 80% at center 45%, black 50%, transparent 95%); mask-image:radial-gradient(ellipse 70% 80% at center 45%, black 50%, transparent 95%);}
+  .tpl-1 .floor-shadow{position:absolute; left:50%; bottom:30px; transform:translateX(-50%); width:520px; height:80px; border-radius:50%; background:radial-gradient(ellipse, rgba(15,16,55,0.35) 0%, transparent 70%); z-index:2;}
+  .tpl-1 .content{position:absolute; top:240px; left:60px; width:580px; z-index:5;}
+  .tpl-1 .eyebrow{color:var(--zafe-mint); font-size:24px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; margin-bottom:32px; display:flex; align-items:center; gap:14px;}
+  .tpl-1 .eyebrow::before{content:''; width:48px; height:3px; background:var(--zafe-mint); display:inline-block;}
+  .tpl-1 h1{color:white; font-size:88px; font-weight:700; line-height:1.05; letter-spacing:-0.03em; margin-bottom:36px;}
+  .tpl-1 .highlight{background:var(--zafe-yellow); color:var(--zafe-ink); padding:0 16px; border-radius:8px; display:inline-block;}
+  .tpl-1 .sub{color:rgba(255,255,255,0.85); font-size:34px; line-height:1.35; max-width:520px;}
+  .tpl-1 .badge-floating{position:absolute; left:60px; bottom:90px; background:var(--zafe-mint); color:var(--zafe-ink); padding:18px 32px; border-radius:999px; font-size:24px; font-weight:600; z-index:6; box-shadow:0 12px 32px rgba(0,0,0,0.18);}
+
+  /* Slide 2 — Dato */
+  .tpl-2{background:var(--zafe-paper);}
+  .tpl-2 .grid-bg{position:absolute; inset:0; background-image:radial-gradient(circle, rgba(79,79,232,0.08) 1.5px, transparent 1.5px); background-size:40px 40px;}
+  .tpl-2 .logo-text{color:var(--zafe-ink);}
+  .tpl-2 .logo-text small{color:var(--zafe-gray); opacity:1;}
+  .tpl-2 .logo-mark{background:var(--zafe-blue-soft);}
+  .tpl-2 .logo-mark svg path{fill:var(--zafe-blue);}
+  .tpl-2 .content{position:absolute; top:240px; left:60px; right:60px;}
+  .tpl-2 .eyebrow{color:var(--zafe-blue); font-size:24px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; margin-bottom:32px; display:flex; align-items:center; gap:14px;}
+  .tpl-2 .eyebrow::before{content:''; width:48px; height:3px; background:var(--zafe-blue); display:inline-block;}
+  .tpl-2 .big-number{color:var(--zafe-blue); font-size:260px; font-weight:700; line-height:0.9; letter-spacing:-0.05em;}
+  .tpl-2 .big-number .accent{color:var(--zafe-mint);}
+  .tpl-2 .description{color:var(--zafe-ink); font-size:44px; line-height:1.3; font-weight:500; margin-top:48px; max-width:660px;}
+  .tpl-2 .description strong{color:var(--zafe-blue); font-weight:700;}
+  .tpl-2 .photo-circle{position:absolute; right:80px; top:280px; width:320px; height:320px; border-radius:50%; overflow:hidden; box-shadow:0 24px 60px rgba(15,16,55,0.15); background-size:cover; background-position:center;}
+  .tpl-2 .photo-circle-ring{position:absolute; right:50px; top:250px; width:380px; height:380px; border-radius:50%; border:6px solid var(--zafe-mint); opacity:0.4;}
+  .tpl-2 .source{position:absolute; bottom:64px; left:60px; color:var(--zafe-gray); font-size:22px;}
+
+  /* Slide 3 — Problema */
+  .tpl-3{background:var(--zafe-blue-deep);}
+  .tpl-3 .photo-wrap{position:absolute; right:0; top:0; width:540px; height:1080px; z-index:1; background-size:cover; background-position:center;}
+  .tpl-3 .photo-wrap::after{content:''; position:absolute; inset:0; background:linear-gradient(270deg, transparent 0%, transparent 30%, rgba(46,46,191,0.4) 70%, rgba(46,46,191,0.9) 100%);}
+  .tpl-3 .content{position:absolute; top:280px; left:60px; width:600px; z-index:5;}
+  .tpl-3 .marker{display:inline-flex; align-items:center; gap:14px; background:rgba(255,216,77,0.18); color:var(--zafe-yellow); padding:14px 28px; border-radius:999px; font-size:24px; font-weight:600; margin-bottom:40px;}
+  .tpl-3 h2{color:white; font-size:72px; font-weight:700; line-height:1.1; letter-spacing:-0.02em; margin-bottom:40px;}
+  .tpl-3 .stat-row{display:flex; gap:24px; margin-top:50px;}
+  .tpl-3 .stat{background:rgba(255,255,255,0.08); border-radius:24px; padding:32px 36px; flex:1;}
+  .tpl-3 .stat-num{color:var(--zafe-mint); font-size:80px; font-weight:700; line-height:1; letter-spacing:-0.02em;}
+  .tpl-3 .stat-label{color:rgba(255,255,255,0.75); font-size:22px; margin-top:14px; line-height:1.3;}
+  .tpl-3 .next-dot{position:absolute; bottom:60px; right:60px; width:64px; height:64px; border-radius:50%; background:white; display:flex; align-items:center; justify-content:center; z-index:10;}
+
+  /* Slide 4 — Dashboard */
+  .tpl-4{background:linear-gradient(180deg, var(--zafe-blue) 0%, var(--zafe-blue) 45%, white 45%, white 100%);}
+  .tpl-4 .content{position:absolute; top:160px; left:60px; right:60px; z-index:5;}
+  .tpl-4 h3{color:white; font-size:60px; font-weight:700; line-height:1.1; letter-spacing:-0.02em; margin-top:100px; margin-bottom:24px;}
+  .tpl-4 .sub{color:rgba(255,255,255,0.85); font-size:30px; line-height:1.4;}
+  .tpl-4 .dashboard{position:absolute; top:540px; left:60px; right:60px; bottom:60px; background:white; border-radius:32px; box-shadow:0 24px 60px rgba(15,16,55,0.18); overflow:hidden; display:flex;}
+  .tpl-4 .sidebar{width:200px; background:var(--zafe-blue); padding:32px 20px;}
+  .tpl-4 .sidebar-logo{width:36px; height:36px; background:rgba(255,255,255,0.18); border-radius:9px; display:flex; align-items:center; justify-content:center; margin-bottom:20px;}
+  .tpl-4 .nav-item{display:flex; align-items:center; gap:10px; color:rgba(255,255,255,0.7); font-size:18px; padding:10px 12px; border-radius:8px; margin-bottom:4px;}
+  .tpl-4 .nav-item.active{background:rgba(255,255,255,0.18); color:white; font-weight:500;}
+  .tpl-4 .nav-dot{width:8px; height:8px; border-radius:2px; background:currentColor;}
+  .tpl-4 .main{flex:1; padding:36px 40px;}
+  .tpl-4 .main-header{display:flex; justify-content:space-between; align-items:center; margin-bottom:28px;}
+  .tpl-4 .main-title{font-size:28px; font-weight:600;}
+  .tpl-4 .date-range{font-size:16px; color:var(--zafe-gray); padding:8px 16px; border:1.5px solid #E5E5EE; border-radius:10px;}
+  .tpl-4 .stats-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-bottom:24px;}
+  .tpl-4 .stat-card{background:#F9F9FE; border-radius:16px; padding:18px 22px; border-left:4px solid var(--zafe-blue);}
+  .tpl-4 .stat-card.mint{border-left-color:var(--zafe-mint);}
+  .tpl-4 .stat-card.yellow{border-left-color:var(--zafe-yellow);}
+  .tpl-4 .stat-card-label{font-size:14px; color:var(--zafe-gray); margin-bottom:6px;}
+  .tpl-4 .stat-card-val{font-size:30px; font-weight:700; letter-spacing:-0.02em;}
+  .tpl-4 .stat-card-trend{font-size:14px; color:var(--zafe-mint); margin-top:4px; font-weight:500;}
+  .tpl-4 .chart-wrap{height:200px; background:#F9F9FE; border-radius:16px; padding:20px; display:flex; align-items:flex-end; gap:14px;}
+  .tpl-4 .bar{flex:1; background:var(--zafe-blue); border-radius:6px 6px 0 0;}
+  .tpl-4 .bar.mint{background:var(--zafe-mint);}
+
+  /* Slide 5 — Testimonial */
+  .tpl-5{background:var(--zafe-mint-soft);}
+  .tpl-5 .logo-text{color:var(--zafe-ink);}
+  .tpl-5 .logo-text small{color:var(--zafe-gray); opacity:1;}
+  .tpl-5 .logo-mark{background:rgba(79,79,232,0.12);}
+  .tpl-5 .logo-mark svg path{fill:var(--zafe-blue);}
+  .tpl-5 .content{position:absolute; top:240px; left:60px; right:60px;}
+  .tpl-5 .quote-mark{font-size:200px; line-height:0.6; color:var(--zafe-blue); font-family:Georgia, serif; height:100px;}
+  .tpl-5 blockquote{color:var(--zafe-ink); font-size:50px; line-height:1.3; font-weight:500; margin-top:40px; letter-spacing:-0.01em; max-width:920px;}
+  .tpl-5 blockquote strong{background:var(--zafe-yellow); padding:0 10px; border-radius:6px;}
+  .tpl-5 .author{display:flex; align-items:center; gap:28px; margin-top:80px;}
+  .tpl-5 .avatar-photo{width:140px; height:140px; border-radius:50%; overflow:hidden; border:5px solid var(--zafe-blue); background-size:cover; background-position:center;}
+  .tpl-5 .author-name{color:var(--zafe-ink); font-size:32px; font-weight:600;}
+  .tpl-5 .author-role{color:var(--zafe-gray); font-size:24px; margin-top:6px;}
+
+  /* Slide 6 — CTA */
+  .tpl-6{background:var(--zafe-ink);}
+  .tpl-6 .photo-wrap{position:absolute; right:0; top:0; width:540px; height:1080px; z-index:1; background-size:cover; background-position:center;}
+  .tpl-6 .photo-wrap::after{content:''; position:absolute; inset:0; background:linear-gradient(270deg, transparent 0%, transparent 40%, rgba(15,16,55,0.5) 80%, rgba(15,16,55,1) 100%);}
+  .tpl-6 .content{position:absolute; top:300px; left:60px; width:580px; z-index:5;}
+  .tpl-6 .eyebrow{color:var(--zafe-mint); font-size:24px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; margin-bottom:32px; display:flex; align-items:center; gap:14px;}
+  .tpl-6 .eyebrow::before{content:''; width:48px; height:3px; background:var(--zafe-mint); display:inline-block;}
+  .tpl-6 h2{color:white; font-size:92px; font-weight:700; line-height:1.05; letter-spacing:-0.03em; margin-bottom:48px;}
+  .tpl-6 .cta-btn{display:inline-flex; align-items:center; gap:20px; background:var(--zafe-mint); color:var(--zafe-ink); padding:30px 52px; border-radius:999px; font-size:34px; font-weight:600; margin-top:30px;}
+  .tpl-6 .web{position:absolute; bottom:64px; left:60px; color:rgba(255,255,255,0.7); font-size:28px; font-weight:500;}
+
+  /* Editable indicator */
+  [contenteditable="true"]{outline:none; cursor:text; transition:box-shadow 0.2s;}
+  [contenteditable="true"]:hover{box-shadow:inset 0 0 0 2px rgba(52,216,163,0.4);}
+  [contenteditable="true"]:focus{box-shadow:inset 0 0 0 2px var(--zafe-mint);}
+
+  .hint{font-size:11px; color:var(--zafe-gray); margin-top:4px; line-height:1.4;}
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <div class="topbar">
+    <div class="brand">
+      <svg viewBox="0 0 24 24" fill-rule="evenodd"><path fill="#4F4FE8" d="M7 3 L17 3 C18.1 3 19 3.9 19 5 L19 15.5 C19 16.6 18.4 17.6 17.5 18.2 L13 20.7 C12.3 21.1 11.7 21.1 11 20.7 L6.5 18.2 C5.6 17.6 5 16.6 5 15.5 L5 5 C5 3.9 5.9 3 7 3 Z M14 8.5 L8.5 12 L14 15.5 Z"/></svg>
+      Zafepay · Editor
+    </div>
+    <div class="spacer"></div>
+    <button class="btn-secondary" onclick="resetTemplate()">↺ Restablecer</button>
+    <button class="btn-export" onclick="exportPNG()">⬇ Exportar PNG (1080×1080)</button>
+  </div>
+
+  <div class="left-panel">
+    <div class="panel-title">Plantillas</div>
+    <div class="templates-list" id="templatesList">
+      <div class="template-item active" data-tpl="1">
+        <div class="template-num">01</div>
+        <div><div class="template-name">Portada</div><div class="template-desc">Titular + silueta</div></div>
+      </div>
+      <div class="template-item" data-tpl="2">
+        <div class="template-num">02</div>
+        <div><div class="template-name">Dato</div><div class="template-desc">Cifra grande + foto circular</div></div>
+      </div>
+      <div class="template-item" data-tpl="3">
+        <div class="template-num">03</div>
+        <div><div class="template-name">Problema</div><div class="template-desc">Foto a sangrado + stats</div></div>
+      </div>
+      <div class="template-item" data-tpl="4">
+        <div class="template-num">04</div>
+        <div><div class="template-name">Producto</div><div class="template-desc">Dashboard mockup</div></div>
+      </div>
+      <div class="template-item" data-tpl="5">
+        <div class="template-num">05</div>
+        <div><div class="template-name">Testimonial</div><div class="template-desc">Cita + autor</div></div>
+      </div>
+      <div class="template-item" data-tpl="6">
+        <div class="template-num">06</div>
+        <div><div class="template-name">CTA</div><div class="template-desc">Llamado a la acción</div></div>
+      </div>
+    </div>
+
+    <div class="tip" style="margin-top:24px;">
+      <strong>💡 Cómo usar</strong><br>
+      • Haz clic en cualquier texto para editarlo.<br>
+      • Cambia foto y colores desde el panel derecho.<br>
+      • Exporta cada slide como PNG listo para Instagram.
+    </div>
+  </div>
+
+  <div class="center">
+    <div class="stage">
+      <div class="stage-inner" id="stage"></div>
+    </div>
+  </div>
+
+  <div class="right-panel">
+    <div class="panel-title">Foto</div>
+    <div class="control-group">
+      <label>Subir desde tu computador</label>
+      <input type="file" accept="image/*" onchange="uploadPhoto(event)">
+      <div class="hint">JPG o PNG. Idealmente sin fondo (PNG transparente) si usas la plantilla con silueta.</div>
+    </div>
+    <div class="control-group">
+      <label>O pega una URL de imagen</label>
+      <input type="url" id="photoUrl" placeholder="https://..." onchange="setPhotoUrl(this.value)">
+      <div class="hint">Tip: usa <strong>remove.bg</strong> gratis para quitar el fondo a tus fotos.</div>
+    </div>
+
+    <div class="panel-title">Colores</div>
+    <div class="color-picker-row">
+      <label>Azul Zafepay</label>
+      <span class="hex" id="hex-blue">#4F4FE8</span>
+      <input type="color" value="#4F4FE8" oninput="updateColor('--zafe-blue', this.value, 'hex-blue')">
+    </div>
+    <div class="color-picker-row">
+      <label>Azul profundo</label>
+      <span class="hex" id="hex-deep">#2E2EBF</span>
+      <input type="color" value="#2E2EBF" oninput="updateColor('--zafe-blue-deep', this.value, 'hex-deep')">
+    </div>
+    <div class="color-picker-row">
+      <label>Mint</label>
+      <span class="hex" id="hex-mint">#34D8A3</span>
+      <input type="color" value="#34D8A3" oninput="updateColor('--zafe-mint', this.value, 'hex-mint')">
+    </div>
+    <div class="color-picker-row">
+      <label>Amarillo highlight</label>
+      <span class="hex" id="hex-yellow">#FFD84D</span>
+      <input type="color" value="#FFD84D" oninput="updateColor('--zafe-yellow', this.value, 'hex-yellow')">
+    </div>
+    <div class="color-picker-row">
+      <label>Ink (texto)</label>
+      <span class="hex" id="hex-ink">#0F1037</span>
+      <input type="color" value="#0F1037" oninput="updateColor('--zafe-ink', this.value, 'hex-ink')">
+    </div>
+
+    <div class="panel-title">Atajos</div>
+    <div class="tip">
+      <strong>Texto:</strong> clic para editar, Enter para nueva línea.<br>
+      <strong>Foto silueta:</strong> idealmente PNG sin fondo.<br>
+      <strong>Tamaño:</strong> exporta 1080×1080 (Instagram cuadrado).
+    </div>
+  </div>
+
+</div>
+
+<!-- Templates as templates -->
+<template id="tpl-1">
+  <div class="slide-render tpl-1">
+    <div class="shape-a"></div>
+    <div class="shape-b"></div>
+    <div class="floor-shadow"></div>
+    <div class="photo-wrap" data-photo="1" style="background-image:url('https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=800&h=1200&fit=crop&q=80&auto=format');"></div>
+    <div class="logo-row">
+      <div class="logo-mark">
+        <svg viewBox="0 0 24 24" fill-rule="evenodd"><path fill="white" d="M7 3 L17 3 C18.1 3 19 3.9 19 5 L19 15.5 C19 16.6 18.4 17.6 17.5 18.2 L13 20.7 C12.3 21.1 11.7 21.1 11 20.7 L6.5 18.2 C5.6 17.6 5 16.6 5 15.5 L5 5 C5 3.9 5.9 3 7 3 Z M14 8.5 L8.5 12 L14 15.5 Z"/></svg>
+      </div>
+      <div class="logo-text">zafepay<small>by PLAGLABS</small></div>
+    </div>
+    <div class="slide-number" contenteditable="true">01 / 06</div>
+    <div class="content">
+      <div class="eyebrow" contenteditable="true">Para colegios y jardines</div>
+      <h1 contenteditable="true">5 errores al cobrar <span class="highlight">mensualidades</span></h1>
+      <p class="sub" contenteditable="true">Y cómo dejar de perderlas en 2026.</p>
+    </div>
+    <div class="badge-floating" contenteditable="true">📚 Jardines y colegios</div>
+  </div>
+</template>
+
+<template id="tpl-2">
+  <div class="slide-render tpl-2">
+    <div class="grid-bg"></div>
+    <div class="logo-row">
+      <div class="logo-mark">
+        <svg viewBox="0 0 24 24" fill-rule="evenodd"><path d="M7 3 L17 3 C18.1 3 19 3.9 19 5 L19 15.5 C19 16.6 18.4 17.6 17.5 18.2 L13 20.7 C12.3 21.1 11.7 21.1 11 20.7 L6.5 18.2 C5.6 17.6 5 16.6 5 15.5 L5 5 C5 3.9 5.9 3 7 3 Z M14 8.5 L8.5 12 L14 15.5 Z"/></svg>
+      </div>
+      <div class="logo-text">zafepay<small>by PLAGLABS</small></div>
+    </div>
+    <div class="slide-number dark" contenteditable="true">02 / 06</div>
+    <div class="content">
+      <div class="eyebrow" contenteditable="true">El problema en cifras</div>
+      <div class="big-number" contenteditable="true">3 de <span class="accent">10</span></div>
+      <p class="description" contenteditable="true">apoderados se atrasan en pagar la mensualidad cuando el proceso es <strong>manual</strong>.</p>
+    </div>
+    <div class="photo-circle-ring"></div>
+    <div class="photo-circle" data-photo="2" style="background-image:url('https://images.unsplash.com/photo-1577896851231-70ef18881754?w=600&h=600&fit=crop&q=80&auto=format');"></div>
+    <div class="source" contenteditable="true">Fuente: estudios sector educacional LATAM</div>
+  </div>
+</template>
+
+<template id="tpl-3">
+  <div class="slide-render tpl-3">
+    <div class="photo-wrap" data-photo="3" style="background-image:url('https://images.unsplash.com/photo-1573164574396-23b8e0a92f55?w=700&h=1100&fit=crop&q=80&auto=format');"></div>
+    <div class="logo-row">
+      <div class="logo-mark">
+        <svg viewBox="0 0 24 24" fill-rule="evenodd"><path fill="white" d="M7 3 L17 3 C18.1 3 19 3.9 19 5 L19 15.5 C19 16.6 18.4 17.6 17.5 18.2 L13 20.7 C12.3 21.1 11.7 21.1 11 20.7 L6.5 18.2 C5.6 17.6 5 16.6 5 15.5 L5 5 C5 3.9 5.9 3 7 3 Z M14 8.5 L8.5 12 L14 15.5 Z"/></svg>
+      </div>
+      <div class="logo-text">zafepay<small>by PLAGLABS</small></div>
+    </div>
+    <div class="slide-number" contenteditable="true">03 / 06</div>
+    <div class="content">
+      <div class="marker" contenteditable="true">⚠ Error #1</div>
+      <h2 contenteditable="true">Perseguir cada pago por WhatsApp.</h2>
+      <div class="stat-row">
+        <div class="stat">
+          <div class="stat-num" contenteditable="true">+12h</div>
+          <div class="stat-label" contenteditable="true">mensuales perdidas en cobranza</div>
+        </div>
+        <div class="stat">
+          <div class="stat-num" contenteditable="true">25%</div>
+          <div class="stat-label" contenteditable="true">de morosidad sin sistema</div>
+        </div>
+      </div>
+    </div>
+    <div class="next-dot">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#4F4FE8" stroke-width="3" stroke-linecap="round"><polyline points="9 6 15 12 9 18"/></svg>
+    </div>
+  </div>
+</template>
+
+<template id="tpl-4">
+  <div class="slide-render tpl-4">
+    <div class="logo-row">
+      <div class="logo-mark">
+        <svg viewBox="0 0 24 24" fill-rule="evenodd"><path fill="white" d="M7 3 L17 3 C18.1 3 19 3.9 19 5 L19 15.5 C19 16.6 18.4 17.6 17.5 18.2 L13 20.7 C12.3 21.1 11.7 21.1 11 20.7 L6.5 18.2 C5.6 17.6 5 16.6 5 15.5 L5 5 C5 3.9 5.9 3 7 3 Z M14 8.5 L8.5 12 L14 15.5 Z"/></svg>
+      </div>
+      <div class="logo-text">zafepay<small>by PLAGLABS</small></div>
+    </div>
+    <div class="slide-number" contenteditable="true">04 / 06</div>
+    <div class="content">
+      <h3 contenteditable="true">Todo bajo control, en una sola pantalla.</h3>
+      <p class="sub" contenteditable="true">Cobros automáticos, recordatorios y reportes en tiempo real.</p>
+    </div>
+    <div class="dashboard">
+      <div class="sidebar">
+        <div class="sidebar-logo">
+          <svg viewBox="0 0 24 24" fill-rule="evenodd"><path fill="white" d="M7 3 L17 3 C18.1 3 19 3.9 19 5 L19 15.5 C19 16.6 18.4 17.6 17.5 18.2 L13 20.7 C12.3 21.1 11.7 21.1 11 20.7 L6.5 18.2 C5.6 17.6 5 16.6 5 15.5 L5 5 C5 3.9 5.9 3 7 3 Z M14 8.5 L8.5 12 L14 15.5 Z"/></svg>
+        </div>
+        <div class="nav-item active"><span class="nav-dot"></span>Resumen</div>
+        <div class="nav-item"><span class="nav-dot"></span>Productos</div>
+        <div class="nav-item"><span class="nav-dot"></span>Suscripciones</div>
+        <div class="nav-item"><span class="nav-dot"></span>Clientes</div>
+        <div class="nav-item"><span class="nav-dot"></span>Pagos</div>
+        <div class="nav-item"><span class="nav-dot"></span>Reportes</div>
+      </div>
+      <div class="main">
+        <div class="main-header">
+          <div class="main-title" contenteditable="true">Resumen del mes</div>
+          <div class="date-range" contenteditable="true">May 2026</div>
+        </div>
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-card-label" contenteditable="true">Total recaudado</div>
+            <div class="stat-card-val" contenteditable="true">$43.5M</div>
+            <div class="stat-card-trend" contenteditable="true">↑ 18% vs mes anterior</div>
+          </div>
+          <div class="stat-card mint">
+            <div class="stat-card-label" contenteditable="true">Transacciones</div>
+            <div class="stat-card-val" contenteditable="true">837</div>
+            <div class="stat-card-trend" contenteditable="true">↑ 12%</div>
+          </div>
+          <div class="stat-card yellow">
+            <div class="stat-card-label" contenteditable="true">Tasa de cobro</div>
+            <div class="stat-card-val" contenteditable="true">94%</div>
+            <div class="stat-card-trend" style="color:#FFA800;" contenteditable="true">↑ 6 pts</div>
+          </div>
+        </div>
+        <div class="chart-wrap">
+          <div class="bar" style="height:45%;"></div>
+          <div class="bar mint" style="height:62%;"></div>
+          <div class="bar" style="height:55%;"></div>
+          <div class="bar mint" style="height:78%;"></div>
+          <div class="bar" style="height:68%;"></div>
+          <div class="bar mint" style="height:88%;"></div>
+          <div class="bar" style="height:75%;"></div>
+          <div class="bar mint" style="height:92%;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<template id="tpl-5">
+  <div class="slide-render tpl-5">
+    <div class="logo-row">
+      <div class="logo-mark">
+        <svg viewBox="0 0 24 24" fill-rule="evenodd"><path d="M7 3 L17 3 C18.1 3 19 3.9 19 5 L19 15.5 C19 16.6 18.4 17.6 17.5 18.2 L13 20.7 C12.3 21.1 11.7 21.1 11 20.7 L6.5 18.2 C5.6 17.6 5 16.6 5 15.5 L5 5 C5 3.9 5.9 3 7 3 Z M14 8.5 L8.5 12 L14 15.5 Z"/></svg>
+      </div>
+      <div class="logo-text">zafepay<small>by PLAGLABS</small></div>
+    </div>
+    <div class="slide-number dark" contenteditable="true">05 / 06</div>
+    <div class="content">
+      <div class="quote-mark">"</div>
+      <blockquote contenteditable="true">Antes pasábamos <strong>2 días al mes</strong> persiguiendo apoderados. Ahora los cobros llegan solos.</blockquote>
+      <div class="author">
+        <div class="avatar-photo" data-photo="5" style="background-image:url('https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&h=400&fit=crop&q=80&auto=format');"></div>
+        <div>
+          <div class="author-name" contenteditable="true">Jardín Infantil Los Girasoles</div>
+          <div class="author-role" contenteditable="true">Cliente Zafepay · Santiago</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<template id="tpl-6">
+  <div class="slide-render tpl-6">
+    <div class="photo-wrap" data-photo="6" style="background-image:url('https://images.unsplash.com/photo-1573164574230-db1d5e960238?w=700&h=1100&fit=crop&q=80&auto=format');"></div>
+    <div class="logo-row">
+      <div class="logo-mark">
+        <svg viewBox="0 0 24 24" fill-rule="evenodd"><path fill="white" d="M7 3 L17 3 C18.1 3 19 3.9 19 5 L19 15.5 C19 16.6 18.4 17.6 17.5 18.2 L13 20.7 C12.3 21.1 11.7 21.1 11 20.7 L6.5 18.2 C5.6 17.6 5 16.6 5 15.5 L5 5 C5 3.9 5.9 3 7 3 Z M14 8.5 L8.5 12 L14 15.5 Z"/></svg>
+      </div>
+      <div class="logo-text">zafepay<small>by PLAGLABS</small></div>
+    </div>
+    <div class="slide-number" contenteditable="true">06 / 06</div>
+    <div class="content">
+      <div class="eyebrow" contenteditable="true">Llegó tu hora</div>
+      <h2 contenteditable="true">Deja de perseguir pagos en 2026.</h2>
+      <div class="cta-btn" contenteditable="true">
+        Agenda tu demo gratis →
+      </div>
+    </div>
+    <div class="web" contenteditable="true">www.zafepay.com</div>
+  </div>
+</template>
+
+<script>
+  let currentTpl = 1;
+
+  function loadTemplate(num){
+    currentTpl = num;
+    const stage = document.getElementById('stage');
+    const tpl = document.getElementById('tpl-' + num);
+    stage.innerHTML = '';
+    stage.appendChild(tpl.content.cloneNode(true));
+    document.querySelectorAll('.template-item').forEach(el=>{
+      el.classList.toggle('active', el.dataset.tpl == num);
+    });
+  }
+
+  document.querySelectorAll('.template-item').forEach(el=>{
+    el.addEventListener('click', ()=> loadTemplate(parseInt(el.dataset.tpl)));
+  });
+
+  function uploadPhoto(event){
+    const file = event.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = e=>{
+      applyPhoto(e.target.result);
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function setPhotoUrl(url){
+    if(url) applyPhoto(url);
+  }
+
+  function applyPhoto(src){
+    const photoEl = document.querySelector('#stage [data-photo]');
+    if(photoEl){
+      photoEl.style.backgroundImage = `url('${src}')`;
+    }
+  }
+
+  function updateColor(varName, value, hexId){
+    document.documentElement.style.setProperty(varName, value);
+    document.getElementById(hexId).textContent = value.toUpperCase();
+  }
+
+  function resetTemplate(){
+    if(confirm('¿Restablecer plantilla? Perderás los cambios.')){
+      loadTemplate(currentTpl);
+    }
+  }
+
+  function exportPNG(){
+    const slideEl = document.querySelector('#stage .slide-render');
+    if(!slideEl) return;
+
+    // Clonar fuera del scaling para exportar a 1080
+    const clone = slideEl.cloneNode(true);
+    const exportWrap = document.createElement('div');
+    exportWrap.style.cssText = 'position:fixed; left:-9999px; top:0; width:1080px; height:1080px;';
+    exportWrap.appendChild(clone);
+    document.body.appendChild(exportWrap);
+
+    html2canvas(clone, {
+      width: 1080,
+      height: 1080,
+      scale: 2,
+      backgroundColor: null,
+      useCORS: true,
+      allowTaint: true
+    }).then(canvas=>{
+      const link = document.createElement('a');
+      link.download = `zafepay_slide_${String(currentTpl).padStart(2,'0')}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+      document.body.removeChild(exportWrap);
+    }).catch(err=>{
+      console.error(err);
+      alert('Error al exportar. Si la foto es externa con CORS bloqueado, sube la imagen desde tu computador en vez de pegar URL.');
+      document.body.removeChild(exportWrap);
+    });
+  }
+
+  loadTemplate(1);
+</script>
+
+</body>
+</html>
