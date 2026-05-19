@@ -59,3 +59,4 @@ Una herramienta web (un solo archivo HTML) que permite:
 ## Equipo
 
 CMO: María Paz Labbé — mariapaz@zafepay.com
+https://mariapazlabbe.github.io/zafepay-editor.github.io/
